@@ -5,6 +5,7 @@ import axios from "axios";
 const Chat = () => {
   const [message, setMessage] = useState("");
   const [chatLog, setChatLog] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (event) => {
     setMessage(event.target.value);
@@ -12,48 +13,89 @@ const Chat = () => {
 
   const sendMessage = async () => {
     if (message.trim() !== "") {
-      setChatLog((prevLog) => [...prevLog, `You: ${message}`]);
+      const newChatLog = [
+        ...chatLog,
+        { author: "You", content: message, id: Date.now() },
+      ];
+      setChatLog(newChatLog);
+      setMessage("");
+      setIsLoading(true);
 
       try {
         const response = await axios.post(
           "http://localhost:8000/chat",
-          { message },
+          { message, history: newChatLog },
           { headers: { "Content-Type": "application/json" } }
         );
 
-        // Logging the entire response object for debugging
-        console.log("Response received from backend:", response);
+        if (response.status === 200) {
+          const responseData = response.data;
 
-        // Assuming response.data contains the expected structure
-        if (
-          response.data &&
-          response.data.choices &&
-          response.data.choices.length > 0 &&
-          response.data.choices[0].message &&
-          response.data.choices[0].message.content
-        ) {
-          setChatLog((prevLog) => [
-            ...prevLog,
-            `Assistant: ${response.data.choices[0].message.content}`,
-          ]);
+          if (
+            responseData &&
+            responseData.choices &&
+            responseData.choices.length > 0
+          ) {
+            const assistantResponse = responseData.choices[0].message.content;
+            animateResponse(assistantResponse);
+          } else {
+            console.error(
+              "Invalid response format from backend:",
+              responseData
+            );
+          }
         } else {
-          console.error("Invalid response format from backend");
+          console.error("Error sending message:", response.statusText);
         }
-
-        setMessage(""); // Clear message input after sending
       } catch (error) {
         console.error("Error sending message:", error);
+      } finally {
+        setIsLoading(false);
       }
     }
+  };
+
+  const animateResponse = (responseContent) => {
+    const words = responseContent.split(" ");
+    let animatedResponse = "";
+    let index = 0;
+
+    const intervalId = setInterval(() => {
+      if (index < words.length) {
+        animatedResponse += words[index] + " ";
+        setChatLog((prevLog) => {
+          const updatedLog = [...prevLog];
+          if (
+            updatedLog.length === 0 ||
+            updatedLog[updatedLog.length - 1].author !== "Bot"
+          ) {
+            updatedLog.push({ author: "Bot", content: "", id: Date.now() });
+          }
+          updatedLog[updatedLog.length - 1].content = animatedResponse.trim();
+          return updatedLog;
+        });
+        index++;
+      } else {
+        clearInterval(intervalId);
+      }
+    }, 200); // Adjust animation speed here (milliseconds per word)
   };
 
   return (
     <div className="chat-container">
       <h1>LLM Chat</h1>
       <div className="chat-log">
-        {chatLog.map((msg, index) => (
-          <div key={index}>{msg}</div>
+        {chatLog.map((msg) => (
+          <div
+            key={msg.id}
+            className={`chat-message ${
+              msg.author === "You" ? "right" : "left"
+            }`}
+          >
+            <div className="message-content">{msg.content}</div>
+          </div>
         ))}
+        {isLoading && <div className="loader">Loading...</div>}
       </div>
       <div className="chat-input">
         <textarea
