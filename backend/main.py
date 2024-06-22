@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response, WebSocket
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import requests
@@ -33,6 +33,10 @@ app.add_middleware(
 async def chat(request: Request):
     data = await request.json()
     user_input = data.get("message")
+    history = data.get("history", [])
+
+    messages = [{"role": "user", "content": entry["content"]} for entry in history]
+    messages.append({"role": "user", "content": user_input})
 
     headers = {
         "Authorization": f"Bearer {openrouter_api_key}",
@@ -42,7 +46,7 @@ async def chat(request: Request):
 
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": user_input}]
+        "messages": messages,
     }
 
     try:
